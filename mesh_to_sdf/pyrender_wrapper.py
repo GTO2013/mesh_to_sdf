@@ -47,17 +47,28 @@ class CustomShaderCache():
             self.program = pyrender.shader_program.ShaderProgram(os.path.join(shaders_directory, 'mesh.vert'), os.path.join(shaders_directory, 'mesh.frag'), defines=defines)
         return self.program
 
+class RenderApp():
+    def __init__(self, resolution, mesh, camera):
+        self.renderer = pyrender.OffscreenRenderer(resolution, resolution)
+        self.resolution = resolution
+        self.renderer._renderer._program_cache = CustomShaderCache()
+        self.scene = pyrender.Scene()
+        self.mesh = pyrender.Mesh.from_trimesh(mesh, smooth=True)
+        self.camera = camera
 
-def render_normal_and_depth_buffers(mesh, camera, camera_transform, resolution):
-    global suppress_multisampling
-    suppress_multisampling = True
-    scene = pyrender.Scene()
-    scene.add(pyrender.Mesh.from_trimesh(mesh, smooth = False))
-    scene.add(camera, pose=camera_transform)
+        self.mesh_node = self.scene.add(self.mesh)
+        self.camera_node = self.scene.add(self.camera)
 
-    renderer = pyrender.OffscreenRenderer(resolution, resolution)
-    renderer._renderer._program_cache = CustomShaderCache()
+    def render_normal_and_depth_buffers(self, camera_transform):
+        global suppress_multisampling
 
-    color, depth = renderer.render(scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
-    suppress_multisampling = False
-    return color, depth
+        suppress_multisampling = True
+        self.scene.set_pose(self.camera_node, camera_transform)
+        color, depth = self.renderer.render(self.scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
+
+        suppress_multisampling = False
+        return color, depth
+
+    def __del__(self):
+        self.scene.remove_node(self.mesh_node)
+        self.scene.remove_node(self.camera_node)
